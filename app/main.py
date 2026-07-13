@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select, and_ # Добавил select и and_ напрямую
 from typing import List, Optional
 from datetime import datetime, timezone
 from .database import init_db, get_session
@@ -12,9 +12,9 @@ app = FastAPI(title="Sirius.Arena Unique MVP")
 @app.on_event("startup")
 def on_startup():
     init_db()
-    # seed admin if not exists
     with next(get_session()) as s:
-        admin = s.exec(__import__("sqlmodel").select(User).where(User.username=="admin")).first()
+        # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel"
+        admin = s.exec(select(User).where(User.username=="admin")).first()
         if not admin:
             from .auth import get_password_hash
             u = User(username="admin", hashed_password=get_password_hash("adminpass"), role="admin")
@@ -22,7 +22,8 @@ def on_startup():
 
 @app.post("/token", response_model=schemas.Token)
 def login_for_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
-    user = session.exec(__import__("sqlmodel").sqlmodel.select(User).where(User.username==form_data.username)).first()
+    # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel"
+    user = s.exec(select(User).where(User.username==form_data.username)).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     access_token = auth.create_access_token({"sub": user.username})
@@ -30,7 +31,8 @@ def login_for_token(form_data: OAuth2PasswordRequestForm = Depends(), session: S
 
 @app.post("/users/signup", status_code=201)
 def signup(username: str, password: str, session: Session = Depends(get_session)):
-    exists = session.exec(__import__("sqlmodel").sqlmodel.select(User).where(User.username==username)).first()
+    # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel"
+    exists = s.exec(select(User).where(User.username==username)).first()
     if exists:
         raise HTTPException(status_code=400, detail="Username exists")
     user = User(username=username, hashed_password=auth.get_password_hash(password), role="user")
@@ -74,7 +76,8 @@ def list_reservations(space_id: int, date: Optional[str] = None, session: Sessio
     sp = crud.get_space(session, space_id)
     if not sp:
         raise HTTPException(status_code=404, detail="Space not found")
-    stmt = __import__("sqlmodel").sqlmodel.select(__import__("app.models").Reservation).where(__import__("app.models").Reservation.space_id == space_id)
+    # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel" и ".sqlmodel"
+    stmt = select(__import__("app.models").Reservation).where(__import__("app.models").Reservation.space_id == space_id)
     if date:
         from datetime import date as date_c, datetime as dt, timezone
         try:
@@ -83,13 +86,15 @@ def list_reservations(space_id: int, date: Optional[str] = None, session: Sessio
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
         start_dt = dt.combine(d, dt.min.time()).replace(tzinfo=timezone.utc)
         end_dt = dt.combine(d, dt.max.time()).replace(tzinfo=timezone.utc)
-        stmt = stmt.where(__import__("sqlmodel").sqlmodel.and_(__import__("app.models").Reservation.start_at >= start_dt, __import__("app.models").Reservation.start_at <= end_dt))
+        # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel" и ".sqlmodel"
+        stmt = stmt.where(and_(__import__("app.models").Reservation.start_at >= start_dt, __import__("app.models").Reservation.start_at <= end_dt))
     results = session.exec(stmt).all()
     return results
 
 @app.get("/my-reservations", response_model=List[schemas.ReservationRead])
 def my_reservations(user: User = Depends(auth.get_current_user), session: Session = Depends(get_session)):
-    stmt = __import__("sqlmodel").sqlmodel.select(__import__("app.models").Reservation).where(__import__("app.models").Reservation.user_name == user.username)
+    # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel"
+    stmt = select(__import__("app.models").Reservation).where(__import__("app.models").Reservation.user_name == user.username)
     return session.exec(stmt).all()
 
 @app.get("/spaces/available", response_model=List[schemas.SpaceRead])
@@ -100,6 +105,8 @@ def spaces_available(start: datetime, end: datetime, capacity: Optional[int] = 0
 
 @app.get("/admin/stats")
 def admin_stats(admin: User = Depends(auth.require_admin), session: Session = Depends(get_session)):
-    total_spaces = session.exec(__import__("sqlmodel").sqlmodel.select(__import__("app.models").Space)).count()
-    total_active = session.exec(__import__("sqlmodel").sqlmodel.select(__import__("app.models").Reservation).where(__import__("app.models").Reservation.status=="active")).count()
+    # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel"
+    total_spaces = session.exec(select(__import__("app.models").Space)).count()
+    # ИСПРАВЛЕНО: удалено лишнее ".sqlmodel"
+    total_active = session.exec(select(__import__("app.models").Reservation).where(__import__("app.models").Reservation.status=="active")).count()
     return {"total_spaces": total_spaces, "active_reservations": total_active}
