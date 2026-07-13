@@ -14,7 +14,7 @@ def on_startup():
     init_db()
     # seed admin if not exists
     with next(get_session()) as s:
-        admin = s.exec(__import__("sqlmodel").sqlmodel.select(User).where(User.username=="admin")).first()
+        admin = s.exec(__import__("sqlmodel").select(User).where(User.username=="admin")).first()
         if not admin:
             from .auth import get_password_hash
             u = User(username="admin", hashed_password=get_password_hash("adminpass"), role="admin")
