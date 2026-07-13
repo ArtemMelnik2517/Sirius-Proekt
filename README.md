@@ -1,3 +1,4 @@
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ArtemMelnik2517/Sirius-Proekt)
 # Sirius.Arena — уникальная версия (FastAPI + Postgres + JWT)
 
 Проект: backend для бронирования пространств. Версия с JWT, ролями, поиском доступных пространств, тестами и Docker Compose.
