@@ -4,20 +4,22 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from .database import init_db, get_session
 from . import crud, auth, schemas
-from .models import User, Space, Reservation # Импортируем модели напрямую
+from .models import User, Space, Reservation
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 
-app = FastAPI(title="Sirius.Arena Unique MVP")
+app = FastAPI(title="Sirius Arena")
 
 @app.on_event("startup")
 def on_startup():
     init_db()
     with next(get_session()) as s:
-        # Теперь здесь простой и понятный код
         admin = s.exec(select(User).where(User.username == "admin")).first()
         if not admin:
             from .auth import get_password_hash
-            u = User(username="admin", hashed_password=get_password_hash("adminpass"), role="admin")
+            u = User(username="admin", hashed_password=get_password_hash("admin"), role="admin")
             s.add(u)
             s.commit()
 
@@ -26,82 +28,36 @@ def login_for_token(form_data: OAuth2PasswordRequestForm = Depends(), session: S
     user = session.exec(select(User).where(User.username == form_data.username)).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
-    access_token = auth.create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": auth.create_access_token(data={"sub": user.username}), "token_type": "bearer"}
 
-@app.post("/users/signup", status_code=201)
-def signup(username: str, password: str, session: Session = Depends(get_session)):
-    exists = session.exec(select(User).where(User.username == username)).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Username exists")
-    user = User(username=username, hashed_password=auth.get_password_hash(password), role="user")
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return {"username": user.username}
+@app.get("/spaces", response_model=List[schemas.SpaceRead])
+def list_spaces(session: Session = Depends(get_session)):
+    return session.exec(select(Space)).all()
 
 @app.post("/spaces", response_model=schemas.SpaceRead, status_code=201)
 def create_space(data: schemas.SpaceCreate, session: Session = Depends(get_session), admin: User = Depends(auth.require_admin)):
-    sp = crud.create_space(session, data.name, data.capacity, data.equipment)
-    return sp
-
-@app.get("/spaces", response_model=List[schemas.SpaceRead])
-def list_spaces(min_capacity: Optional[int] = 0, equipment: Optional[str] = None, session: Session = Depends(get_session)):
-    eq = [x.strip() for x in equipment.split(",")] if equipment else None
-    return crud.list_spaces(session, min_capacity, eq)
-
-@app.get("/spaces/{space_id}", response_model=schemas.SpaceRead)
-def get_space(space_id: int, session: Session = Depends(get_session)):
-    sp = crud.get_space(session, space_id)
-    if not sp:
-        raise HTTPException(status_code=404, detail="Space not found")
-    return sp
+    return crud.create_space(session, data.name, data.capacity, data.equipment)
 
 @app.post("/reservations", response_model=schemas.ReservationRead, status_code=201)
 def create_reservation(data: schemas.ReservationCreate, session: Session = Depends(get_session), user: User = Depends(auth.get_current_user)):
-    if data.start_at.tzinfo is None or data.end_at.tzinfo is None:
-        raise HTTPException(status_code=400, detail="Use timezone-aware datetimes (ISO8601 with Z)")
-    if data.end_at <= data.start_at:
-        raise HTTPException(status_code=400, detail="end_at must be after start_at")
-    if data.end_at <= datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="end_at must be in the future")
     return crud.create_reservation(session, data.space_id, data.start_at, data.end_at, user.username)
 
-@app.delete("/reservations/{res_id}")
-def cancel_reservation(res_id: int, session: Session = Depends(get_session), user: User = Depends(auth.get_current_user)):
-    res = crud.cancel_reservation(session, res_id, user)
-    return {"detail": f"Reservation {res.id} cancelled"}
+@app.post("/users/signup", status_code=201)
+def signup(username: str, password: str, session: Session = Depends(get_session)):
+    user = User(username=username, hashed_password=auth.get_password_hash(password), role="user")
+    session.add(user); session.commit(); session.refresh(user)
+    return {"username": user.username}
 
-@app.get("/spaces/{space_id}/reservations", response_model=List[schemas.ReservationRead])
-def list_reservations(space_id: int, date: Optional[str] = None, session: Session = Depends(get_session)):
-    sp = crud.get_space(session, space_id)
-    if not sp:
-        raise HTTPException(status_code=404, detail="Space not found")
-    stmt = select(Reservation).where(Reservation.space_id == space_id)
-    if date:
-        try:
-            d = datetime.strptime(date, "%Y-%m-%d").date()
-        except:
-            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
-        start_dt = datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
-        end_dt = datetime.combine(d, datetime.max.time()).replace(tzinfo=timezone.utc)
-        stmt = stmt.where(and_(Reservation.start_at >= start_dt, Reservation.start_at <= end_dt))
-    results = session.exec(stmt).all()
-    return results
+# Путь к статике (проверенная версия)
+script_dir = os.path.dirname(__file__)
+static_path = os.path.join(script_dir, "static")
 
-@app.get("/my-reservations", response_model=List[schemas.ReservationRead])
-def my_reservations(user: User = Depends(auth.get_current_user), session: Session = Depends(get_session)):
-    stmt = select(Reservation).where(Reservation.user_name == user.username)
-    return session.exec(stmt).all()
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
 
-@app.get("/spaces/available", response_model=List[schemas.SpaceRead])
-def spaces_available(start: datetime, end: datetime, capacity: Optional[int] = 0, session: Session = Depends(get_session)):
-    if end <= start:
-        raise HTTPException(status_code=400, detail="end must be after start")
-    return [s for s in crud.list_spaces(session, capacity) if not crud.reservations_overlap(session, s.id, start, end)]
-
-@app.get("/admin/stats")
-def admin_stats(admin: User = Depends(auth.require_admin), session: Session = Depends(get_session)):
-    total_spaces = session.query(Space).count()
-    total_active = session.query(Reservation).filter(Reservation.status == "active").count()
-    return {"total_spaces": total_spaces, "active_reservations": total_active}
+@app.get("/")
+async def read_index():
+    index_file = os.path.join(static_path, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"error": "Файл index.html не найден в папке app/static"}

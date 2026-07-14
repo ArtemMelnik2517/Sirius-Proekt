@@ -1,11 +1,12 @@
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, JSON
 from datetime import datetime
 
 class SpaceBase(SQLModel):
     name: str
     capacity: int
-    equipment: Optional[List[str]] = Field(default_factory=list)
+    equipment: List[str] = Field(default=[], sa_column=Column(JSON))
 
 class Space(SpaceBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

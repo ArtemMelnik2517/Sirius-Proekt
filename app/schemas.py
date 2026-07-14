@@ -5,10 +5,15 @@ from pydantic import BaseModel
 class SpaceCreate(BaseModel):
     name: str
     capacity: int
-    equipment: Optional[List[str]] = []
+    equipment: List[str] = []
 
-class SpaceRead(SpaceCreate):
+class SpaceRead(BaseModel):
     id: int
+    name: str
+    capacity: int
+    equipment: List[str]
+    class Config:
+        orm_mode = True
 
 class ReservationCreate(BaseModel):
     space_id: int
@@ -16,9 +21,15 @@ class ReservationCreate(BaseModel):
     end_at: datetime
     user_name: str
 
-class ReservationRead(ReservationCreate):
+class ReservationRead(BaseModel):
     id: int
+    space_id: int
+    start_at: datetime
+    end_at: datetime
+    user_name: str
     status: str
+    class Config:
+        orm_mode = True
 
 class Token(BaseModel):
     access_token: str

@@ -4,6 +4,7 @@ sqlmodel==0.0.8
 psycopg2-binary==2.9.9
 python-jose==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==3.2.0
 pydantic==1.10.10
 httpx==0.24.1
 pytest==7.4.0

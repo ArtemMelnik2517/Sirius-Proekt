@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Sirius Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">Sirius Arena: Бронирование</h1>
+        
+        <div id="auth-section" class="bg-white p-6 rounded-lg shadow mb-6 border-l-4 border-yellow-500">
+            <p class="font-bold mb-2">Авторизация:</p>
+            <input type="text" id="user" placeholder="Логин" class="border p-2 rounded mr-2">
+            <input type="password" id="pass" placeholder="Пароль" class="border p-2 rounded mr-2">
+            <button onclick="login()" class="bg-yellow-500 text-white px-4 py-2 rounded">Войти</button>
+            <button onclick="signup()" class="ml-2 text-blue-600 underline">Регистрация</button>
+            <p id="msg" class="mt-2 text-sm"></p>
+        </div>
+
+        <div id="rooms" class="grid gap-6"></div>
+    </div>
+
+    <script>
+        let token = null;
+        let myUser = null;
+
+        async function signup() {
+            const u = document.getElementById('user').value;
+            const p = document.getElementById('pass').value;
+            await fetch(`/users/signup?username=${u}&password=${p}`, {method:'POST'});
+            alert("Готово! Теперь жмите Войти");
+        }
+
+        async function login() {
+            const u = document.getElementById('user').value;
+            const p = document.getElementById('pass').value;
+            const fd = new URLSearchParams(); fd.append('username', u); fd.append('password', p);
+            const res = await fetch('/token', {method:'POST', body:fd});
+            if(res.ok) {
+                const data = await res.json();
+                token = data.access_token; myUser = u;
+                document.getElementById('msg').innerText = "Вы вошли как " + u;
+                document.getElementById('auth-section').style.display = 'none';
+            } else alert("Ошибка входа!");
+        }
+
+        async function loadRooms() {
+            const res = await fetch('/spaces');
+            const data = await res.json();
+            document.getElementById('rooms').innerHTML = data.map(r => `
+                <div class="bg-white p-6 rounded shadow">
+                    <h2 class="text-xl font-bold">${r.name} (ID: ${r.id})</h2>
+                    <p>Вместимость: ${r.capacity}</p>
+                    <div class="mt-4">
+                        <input type="datetime-local" id="s-${r.id}" class="border p-1">
+                        <input type="datetime-local" id="e-${r.id}" class="border p-1">
+                        <button onclick="book(${r.id})" class="bg-blue-600 text-white px-3 py-1 rounded">Бронь</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function book(id) {
+            if(!token) return alert("Войдите!");
+            const s = document.getElementById('s-'+id).value + ":00Z";
+            const e = document.getElementById('e-'+id).value + ":00Z";
+            const res = await fetch('/reservations', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json', 'Authorization': 'Bearer '+token},
+                body: JSON.stringify({space_id:id, start_at:s, end_at:e, user_name:myUser})
+            });
+            if(res.ok) alert("Успех!"); else alert("Ошибка/Конфликт!");
+        }
+        loadRooms();
+    </script>
+</body>
+</html>
