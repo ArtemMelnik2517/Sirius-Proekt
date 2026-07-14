@@ -7,7 +7,7 @@
 1) docker-compose up --build
 2) Открыть http://localhost:8000/docs
 
-Default admin: username=admin, password=adminpass (создаётся при старте)
+Default admin: username=admin, password=admin (создаётся при старте)
 Регистрация: POST /users/signup?username=...&password=...
 Получение токена: POST /token (form) username/password
 
