@@ -5,7 +5,7 @@
 
 Запуск (локально с Docker):
 1) docker-compose up --build
-2) Открыть http://localhost:8000/docs
+2) Открыть Codespaces и в терминал ввести команду - "docker-compose up --build"
 3) Добавить /docs после ссылки, чтобы увидеть рабочую часть программы
 
 Default admin: username=admin, password=admin (создаётся при старте)
